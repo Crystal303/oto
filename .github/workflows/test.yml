@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ['1.18.x', '1.19.x', '1.20.x', '1.21.x']
+        go: ["1.18.x", "1.19.x", "1.20.x", "1.21.x"]
     name: Test with Go ${{ matrix.go }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     defaults:
@@ -72,10 +72,10 @@ jobs:
           go mod init foo
           echo 'package main' > main.go
           echo 'import (' >> main.go
-          echo '  _ "github.com/ebitengine/oto/v3"' >> main.go
+          echo '  _ "github.com/Crystal303/oto"' >> main.go
           echo ')' >> main.go
           echo 'func main() {}' >> main.go
-          go mod edit -replace github.com/ebitengine/oto/v3=$GITHUB_WORKSPACE
+          go mod edit -replace github.com/Crystal303/oto=$GITHUB_WORKSPACE
           go mod tidy
           go mod vendor
           go build -v .
