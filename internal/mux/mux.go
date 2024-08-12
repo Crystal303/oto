@@ -56,6 +56,7 @@ type Mux struct {
 	players map[*playerImpl]struct{}
 	buf     []float32
 	cond    *sync.Cond
+	done    chan struct{}
 }
 
 // New creates a new Mux.
@@ -65,6 +66,7 @@ func New(sampleRate int, channelCount int, format Format) *Mux {
 		channelCount: channelCount,
 		format:       format,
 		cond:         sync.NewCond(&sync.Mutex{}),
+		done:         make(chan struct{}, 1),
 	}
 	go m.loop()
 	return m
@@ -91,6 +93,11 @@ func (m *Mux) wait() {
 func (m *Mux) loop() {
 	var players []*playerImpl
 	for {
+		select {
+		case <-m.done:
+			return
+		default:
+		}
 		m.wait()
 
 		m.cond.L.Lock()
@@ -154,6 +161,10 @@ func (m *Mux) ReadFloat32s(buf []float32) {
 		p.readBufferAndAdd(buf)
 	}
 	m.cond.Signal()
+}
+
+func (m *Mux) Close() {
+	close(m.done)
 }
 
 type Player struct {

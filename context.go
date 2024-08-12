@@ -171,6 +171,9 @@ func (a *atomicError) TryStore(err error) {
 	defer a.m.Unlock()
 	if a.err == nil {
 		a.err = err
+		contextCreationMutex.Lock()
+		contextCreated = false
+		contextCreationMutex.Unlock()
 	}
 }
 

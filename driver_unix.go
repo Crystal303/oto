@@ -23,6 +23,7 @@ import "C"
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"unsafe"
@@ -147,6 +148,7 @@ func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeI
 			c.err.TryStore(fmt.Errorf("oto: ALSA error at snd_pcm_open: %s", strings.Join(msgs, ", ")))
 			return
 		}
+		runtime.SetFinalizer(c, (*context).Close)
 
 		// TODO: Should snd_pcm_hw_params_set_periods be called explicitly?
 		const periods = 2
@@ -178,7 +180,7 @@ func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeI
 func (c *context) alsaPcmHwParams(sampleRate, channelCount int, bufferSize, periodSize *C.snd_pcm_uframes_t) error {
 	var params *C.snd_pcm_hw_params_t
 	C.snd_pcm_hw_params_malloc(&params)
-	defer C.free(unsafe.Pointer(params))
+	defer C.snd_pcm_hw_params_free(params)
 
 	if err := C.snd_pcm_hw_params_any(c.handle, params); err < 0 {
 		return alsaError("snd_pcm_hw_params_any", err)
@@ -226,6 +228,7 @@ func (c *context) readAndWrite(buf32 []float32) bool {
 
 	for len(buf32) > 0 {
 		n := C.snd_pcm_writei(c.handle, unsafe.Pointer(&buf32[0]), C.snd_pcm_uframes_t(len(buf32)/c.channelCount))
+		runtime.KeepAlive(c)
 		if n < 0 {
 			n = C.long(C.snd_pcm_recover(c.handle, C.int(n), 1))
 		}
@@ -253,6 +256,19 @@ func (c *context) Suspend() error {
 	// Do not use snd_pcm_pause as not all devices support this.
 	// Do not use snd_pcm_drop as this might hang (https://github.com/libsdl-org/SDL/blob/a5c610b0a3857d3138f3f3da1f6dc3172c5ea4a8/src/audio/alsa/SDL_alsa_audio.c#L478).
 	return nil
+}
+
+func (c *context) Close() {
+	if c.handle != nil {
+		C.snd_pcm_drain(c.handle)
+		C.snd_pcm_close(c.handle)
+		c.handle = nil
+	}
+	if c.mux != nil {
+		c.mux.Close()
+	}
+	theContext = nil
+	runtime.SetFinalizer(c, nil)
 }
 
 func (c *context) Resume() error {
