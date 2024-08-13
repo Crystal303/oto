@@ -86,6 +86,11 @@ func (m *Mux) wait() {
 	defer m.cond.L.Unlock()
 
 	for m.shouldWait() {
+		select {
+		case <-m.done:
+			return
+		default:
+		}
 		m.cond.Wait()
 	}
 }
@@ -93,12 +98,12 @@ func (m *Mux) wait() {
 func (m *Mux) loop() {
 	var players []*playerImpl
 	for {
+		m.wait()
 		select {
 		case <-m.done:
 			return
 		default:
 		}
-		m.wait()
 
 		m.cond.L.Lock()
 		for i := range players {
@@ -165,6 +170,9 @@ func (m *Mux) ReadFloat32s(buf []float32) {
 
 func (m *Mux) Close() {
 	close(m.done)
+	m.cond.L.Lock()
+	m.cond.Broadcast()
+	m.cond.L.Unlock()
 }
 
 type Player struct {

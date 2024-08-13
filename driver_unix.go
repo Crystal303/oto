@@ -266,6 +266,7 @@ func (c *context) Close() {
 	}
 	if c.mux != nil {
 		c.mux.Close()
+		c.mux = nil
 	}
 	theContext = nil
 	runtime.SetFinalizer(c, nil)
