@@ -44,6 +44,8 @@ type context struct {
 	err atomicError
 
 	ready chan struct{}
+
+	device string
 }
 
 var theContext *context
@@ -107,12 +109,18 @@ func deviceCandidates() []string {
 	return devices
 }
 
-func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeInBytes int) (*context, chan struct{}, error) {
+func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeInBytes int, options ...interface{}) (*context, chan struct{}, error) {
 	c := &context{
 		channelCount: channelCount,
 		cond:         sync.NewCond(&sync.Mutex{}),
 		mux:          mux.New(sampleRate, channelCount, format),
 		ready:        make(chan struct{}),
+	}
+	if len(options) > 0 {
+		name, ok := options[0].(string)
+		if ok {
+			c.device = name
+		}
 	}
 	theContext = c
 
@@ -127,7 +135,11 @@ func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeI
 		var openErrs []openError
 		var found bool
 
-		for _, name := range deviceCandidates() {
+		devices := []string{c.device}
+		if c.device == "" {
+			devices = deviceCandidates()
+		}
+		for _, name := range devices {
 			cname := C.CString(name)
 			defer C.free(unsafe.Pointer(cname))
 			if err := C.snd_pcm_open(&c.handle, cname, C.SND_PCM_STREAM_PLAYBACK, 0); err < 0 {
@@ -152,13 +164,16 @@ func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeI
 
 		// TODO: Should snd_pcm_hw_params_set_periods be called explicitly?
 		const periods = 2
-		var periodSize C.snd_pcm_uframes_t
+		var (
+			periodSize, bufferSize C.snd_pcm_uframes_t
+		)
 		if bufferSizeInBytes != 0 {
 			periodSize = C.snd_pcm_uframes_t(bufferSizeInBytes / (channelCount * 4 * periods))
+			bufferSize = C.snd_pcm_uframes_t(bufferSizeInBytes / (channelCount * 2 * periods))
 		} else {
 			periodSize = C.snd_pcm_uframes_t(1024)
+			bufferSize = C.snd_pcm_uframes_t(1024 * periods)
 		}
-		bufferSize := periodSize * periods
 		if err := c.alsaPcmHwParams(sampleRate, channelCount, &bufferSize, &periodSize); err != nil {
 			c.err.TryStore(err)
 			return
@@ -191,13 +206,13 @@ func (c *context) alsaPcmHwParams(sampleRate, channelCount int, bufferSize, peri
 	if err := C.snd_pcm_hw_params_set_format(c.handle, params, C.SND_PCM_FORMAT_FLOAT_LE); err < 0 {
 		return alsaError("snd_pcm_hw_params_set_format", err)
 	}
-	if err := C.snd_pcm_hw_params_set_channels(c.handle, params, C.unsigned(channelCount)); err < 0 {
+	if err := C.snd_pcm_hw_params_set_channels(c.handle, params, C.uint(channelCount)); err < 0 {
 		return alsaError("snd_pcm_hw_params_set_channels", err)
 	}
 	if err := C.snd_pcm_hw_params_set_rate_resample(c.handle, params, 1); err < 0 {
 		return alsaError("snd_pcm_hw_params_set_rate_resample", err)
 	}
-	sr := C.unsigned(sampleRate)
+	sr := C.uint(sampleRate)
 	if err := C.snd_pcm_hw_params_set_rate_near(c.handle, params, &sr, nil); err < 0 {
 		return alsaError("snd_pcm_hw_params_set_rate_near", err)
 	}

@@ -24,7 +24,7 @@ type context struct {
 	mux *mux.Mux
 }
 
-func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeInBytes int) (*context, chan struct{}, error) {
+func newContext(sampleRate int, channelCount int, format mux.Format, bufferSizeInBytes int, options ...interface{}) (*context, chan struct{}, error) {
 	ready := make(chan struct{})
 	close(ready)
 

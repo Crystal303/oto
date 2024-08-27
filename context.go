@@ -73,6 +73,9 @@ type NewContextOptions struct {
 	// Too big buffer size can increase the latency time.
 	// On the other hand, too small buffer size can cause glitch noises due to buffer shortage.
 	BufferSize time.Duration
+
+	// Device specifies the device name.
+	Device string
 }
 
 // NewContext creates a new context with given options.
@@ -97,7 +100,7 @@ func NewContext(options *NewContextOptions) (*Context, chan struct{}, error) {
 		bufferSizeInBytes = int(int64(options.BufferSize) * int64(bytesPerSecond) / int64(time.Second))
 		bufferSizeInBytes = bufferSizeInBytes / bytesPerSample * bytesPerSample
 	}
-	ctx, ready, err := newContext(options.SampleRate, options.ChannelCount, mux.Format(options.Format), bufferSizeInBytes)
+	ctx, ready, err := newContext(options.SampleRate, options.ChannelCount, mux.Format(options.Format), bufferSizeInBytes, options.Device)
 	if err != nil {
 		return nil, nil, err
 	}
